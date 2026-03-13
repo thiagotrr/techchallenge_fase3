@@ -7,11 +7,11 @@ Assistente médico virutal, treinado com os dados próprios de um hospital hipot
 Os fluxos de decisão é baseado em grafos e foram implementados com uso de LangGraph.
 
 ### Modelo LLM
-Focado em processamento de liguagem natural, opção foi pelo modelo  `Mistral 7B`, baseando a escolha em:
-- 32kb de contexto
-- Superar Llama 2 13B e Llama 1 34B em diversos benchmarks
-- Fine tunning facilitado com LoRA (Low-Rank Adaptation)
+Focado em processamento de liguagem natural, opção foi pelo modelo  `Qwen 3.5-2B`, baseando a escolha em:
+- Fins acadêmicos
+- Leveza do modelo
 - Boa performance com GPUs modestas
+- Apto a utilizar LoRA
 
 ### Dados para fine-tunning
 #### MedPT
@@ -23,12 +23,14 @@ Agradecimento à [Fernanda Bufon Farber](https://www.linkedin.com/in/ACoAADJqYUg
 #### MedQuAD: Medical Question Answering Dataset
 Conjunto de Dados de Perguntas e Respostas Médicas), é uma coleção de pares de perguntas e respostas meticulosamente selecionadas de 12 sites confiáveis do National Institutes of Health (NIH). Esses sites cobrem uma ampla gama de tópicos de saúde, desde cancer.gov até GARD (Genetic and Rare Diseases Information Resource)
 
-## 2. Instalação
+## 2. Instalação (REVISAR)
 Pré-requisito: Ollama instalado no SO
+
 ### Modelo e Pacotes
 - > ollama run mistral
 - > pip install -r requirements.txt
 - > python -m spacy download pt_core_news_sm
+
 ### Extras
 - Configurar arquivo .env
 ```
@@ -37,3 +39,11 @@ OPENAI_API_KEY=
 ```
 
 ## Execução
+
+### GPU ou CPU
+O código foi pensado para detectar a presença de GPU. No entanto, pode ser forçado o treino e execução passando os parâmetros:
+```
+train(device="cuda")
+#ou
+train(device="cpu")
+```
