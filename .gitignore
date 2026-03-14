@@ -208,3 +208,9 @@ __marimo__/
 
 # Guidelines
 *guideline.md
+
+# Local Models (large binary files – download separately from HuggingFace)
+models/
+!models/gemma-3-med-assist/
+models/gemma-3-med-assist/*
+!models/gemma-3-med-assist/README.md
