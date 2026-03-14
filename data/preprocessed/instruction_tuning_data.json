@@ -1,0 +1,102 @@
+[
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Ortopedista - traumatologista.",
+    "input": "fazer aplicação de ácido hialurônico no ombro para melhorar o movimento da adesiva funciona ?",
+    "output": "pode funcionar , associado com fisioterapia ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Ortopedista - traumatologista.",
+    "input": "fazer aplicação de ácido hialurônico no ombro para melhorar o movimento da adesiva funciona ?",
+    "output": "o bloqueio do movimento causado pela se deve a um encurtamento da cápsula articular devido a aderências fibrosas . a recuperação do arco de movimento é alcançado na maioria das vezes por um bom tratamento fisioterápico e pela própria evolução natural da doença ( fase de descongelamento ) . alguns casos refratários podem necessitar de liberação capsular cirúrgica.não recomendo uso intra-articular de ácido hialurônico no tratamento da adesiva ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista, Médico acupunturista.",
+    "input": "posso fazer uso regularmente de alupurinol diariamente para controlar o ácido úrico por muitos meses e até anos ?",
+    "output": "olá ! sim , pode ser necessário utilizar medicações para controle dos níveis de ácido úrico ( como o alopurinol ) durante muito tempo"
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista, Especialista em dor, Internista.",
+    "input": "o que é artrite gotosa?o que provoca isto ?",
+    "output": "artrite gotosa é a inflamação de uma articulação causa da pelo acúmulo de cristais de ácido úrico.esse é motivado por uma alteração no metabolismo do ácido úrico , que faz com que a pessoa que tem gota produzir mais ácido úrico do que elimina , provocando este desequilíbrio na sua quantidade e consequentemente o seu acúmulo no sangue e em algumas estruturas , como articulações , rins e pele ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista.",
+    "input": "o que é artrite gotosa?o que provoca isto ?",
+    "output": "a artrite gotosa é uma inflamação dentro da articulações que ocorre pelo depósito de ácido úrico na forma de monourato de sódio . esta manifestação clínica faz parte de uma doença conhecida como gota . a gota se caracteriza por aumento do ácido úrico no sangue e depósitos articulares ou extra-articulares de monourato de sódio.o excesso de ácido úrico no organismo pode ocorrer tanto por excesso de sua produção , quanto por redução de sua excreção ( sendo este último o mecanismo responsável por cerca de 85 dos casos ) ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista, Médico acupunturista.",
+    "input": "queria saber mulher pode ter artrite gotosa ? uma dúvida pode usa molho de tomate caseiro feito em casa ? no caso de ácido úrico altopode usar azeite de oliva ? estresse fator emocional eleva ácido úrico ?",
+    "output": "olá bom dia ! embora seja bem menos frequente , artrite gotosa também pode acontecer em mulheres . extrato de molho de tomate deve ser evitado , já o azeite de oliva pode ser usado . estresse emocional não é considerado fator de risco para ácido úrico elevado"
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Médico clínico geral, Reumatologista.",
+    "input": "queria saber mulher pode ter artrite gotosa ? uma dúvida pode usa molho de tomate caseiro feito em casa ? no caso de ácido úrico altopode usar azeite de oliva ? estresse fator emocional eleva ácido úrico ?",
+    "output": "apesar dessa doença predominar no sexo masculino , a gota também ocorre em mulheres , principalmente após a menopausa , sendo a faixa etária mais frequente no sexo feminino entre os 55 a 70 anos . o tomate pode alterar mas não é o alimento principal para interferir no nível de ácido úrico . devem ser evitados certos alimentos como : bebidas alcoólicas , miúdos , proteínas de origem animal , refrigerantes ou comidas e bebidas ricas em frutoses ( refrigerantes ) . carne de porco , frutos do mar e condimentos salgados devem ser utilizados com moderação . a dieta ajuda , mas a terapia medicamentosa e o acompanhamento médico regular são fundamentais para um bom resultado do tratamento ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista, Especialista em dor, Internista.",
+    "input": "tenho gota e faço uso contínuo de alopurinol 100mgdia por 2 anos . agora houve elevação de tgotgp . isso é do remédio ?",
+    "output": "pouco provável , pois sua posologia é baixa . é necessário procurar outras causas , como a esteatose hepática , por exemplo , está muito associada a gota ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Reumatologista.",
+    "input": "tenho gota e faço uso contínuo de alopurinol 100mgdia por 2 anos . agora houve elevação de tgotgp . isso é do remédio ?",
+    "output": "a elevação das transaminases ( , tgp ) podem ter múltiplas causas , inclusive o uso da medicação sim , apesar de não ser a principal hipótese pela dose não ser alta . poreém a combinação do alopurinol com outras medicações hepatotóxicas ( como antiinflamatórios ) ou o uso de álcool pode aumentá-las . outra causa a ser investigada é a esteatose hepática ( popularmente conhecida como gordura no fígado ) que está associada em alguns casos com a presença da gota ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Médico do esporte, Ortopedista - traumatologista.",
+    "input": "no laudo da minha ressonancia deu afilamento condral irregular nas areas de cargas significa que estou com condromalacia em qual grau ?",
+    "output": "você deve mostrar o exame para o médico que o solicitou estudar as imagens nos filmes e tirar as suas dúvidas ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what ( are ) glaucoma ?",
+    "output": "glaucoma a group diseases optic nerve and vision . glaucoma , risk much greater for over 60 . how glaucoma develops there several different . involve drainage system . at there is a small anterior chamber . a clear through this chamber tissues . ( more about glaucoma . enlarge , click right-hand corner . , ( ) . ) in glaucoma , for , drains too slowly . as fluid , pressure inside rises . unless this pressure is controlled , may optic nerve other . open-angle glaucoma common glaucoma called glaucoma . normal , clear fluid leaves anterior chamber . fluid , through a spongy , a , . sometimes , fluid , it passes slowly , pressure inside . pressure optic nerve , open-angle glaucoma -- -- may . there is no cure for glaucoma . vision lost from be restored . however , there may . that early diagnosis important . see this graphic for a quick , including how many , whos , do have , more . see a glaucoma terms ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "glaucoma ?",
+    "output": "nearly 2.7 glaucoma , a states . , at higher risk . they include - african-americans over age 40 - everyone over age 60 , / - a family history . african-americans over age 40 everyone over age 60 , / a family history . , eye pressure is a risk factor . develop pressure optic nerve can tolerate without being damaged . this level different for person . why a comprehensive dilated eye exam . eye care professional pressure is normal . another risk factor for optic nerve damage relates . , it to also that pressure at a proper level medical doctor . ( more about . enlarge , click right-hand corner . , ( ) . )"
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what are ?",
+    "output": "symptoms glaucoma glaucoma can one or both eyes . common glaucoma , open-angle glaucoma , has no symptoms . it causes no , seems normal . without , glaucoma slowly lose peripheral , . they seem through a tunnel . over time , straight-ahead vision may decrease until no vision remains . tests for glaucoma glaucoma detected through a comprehensive eye exam that includes a visual acuity test , visual field test , dilated eye exam , tonometry , and . ( more about testing for glaucoma . enlarge , click right-hand corner . , ( ) . ) a visual acuity test uses an eye chart test distances . a visual field test measures side or peripheral . it eye care professional have lost , a . in a dilated eye exam , drops , or dilate , pupils . eye care professional uses a optic nerve for signs other eye problems . after , close-up may for several hours . in tonometry , an instrument pressure inside . numbing drops may for this test . pachymetry , a drop . eye care professional uses an ultrasonic wave instrument ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what are treatments for glaucoma ?",
+    "output": "although glaucoma cannot be cured , be controlled . may , they do not improve sight already lost from glaucoma . for glaucoma are . medications medications for glaucoma may be either drops or pills . some reduce pressure . others drainage . ( more about glaucoma . enlarge , click right-hand corner . , ( ) . ) for , regular use pressure . but , these drugs may stop working over time . or , they may cause . if a problem , eye care professional select other drugs , change , suggest other . read or glaucoma . for glaucoma . during , a strong light anterior chamber fluid . this results a series changes that makes easier for fluid . over time , . have this form taking glaucoma drugs . researching , nei seeking better , treat , vision loss glaucoma . for , researchers have discovered genes could . nei also supporting more about is , treat eye pressure , ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what ( are ) glaucoma ?",
+    "output": "glaucoma a group diseases optic nerve and vision . common glaucoma . early , can protect your eyes against serious vision loss . ( more about glaucoma . enlarge , click right-hand corner . , ( ) . ) this graphic for a quick , including how many , whos , do have , more . see a glaucoma terms ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what ( are ) glaucoma ?",
+    "output": "optic nerve is a more than 1 nerve fibers . connects ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what ( are ) glaucoma ?",
+    "output": "open-angle glaucoma common . normal , clear fluid leaves anterior chamber . fluid , through a spongy , a , . sometimes , fluid , it passes slowly , pressure inside . pressure optic nerve , open-angle glaucoma -- -- may ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "for glaucoma ? ?",
+    "output": "glaucoma . some at higher risk than others . they include - african-americans over age 40 - everyone over age 60 , / - a family history . african-americans over age 40 everyone over age 60 , / a family history . see this graphic for a quick , including how many , whos , do have , more ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "how glaucoma ?",
+    "output": "at this time , do not glaucoma . however , studies have shown that early glaucoma , before it causes major vision loss , . so , higher risk groups , have a comprehensive dilated eye least one . get tips care professional . a comprehensive dilated eye exam involves ."
+  },
+  {
+    "instruction": "Responda à pergunta com base no contexto fornecido. Área de domínio: Glaucoma.",
+    "input": "what are ?",
+    "output": "at , open-angle glaucoma has no symptoms . it causes no . vision seems normal . without , glaucoma slowly lose peripheral , . they seem through a tunnel . over time , straight-ahead vision may decrease until no vision remains ."
+  }
+]
