@@ -1,8 +1,12 @@
-﻿import os
+import os
 import re
 import json
+import sys
 from pathlib import Path
 from typing import Optional, Union
+
+# Garante que src/ esteja no path para importar log_record
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 import spacy

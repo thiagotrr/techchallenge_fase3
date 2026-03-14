@@ -1,9 +1,25 @@
-import logging
+"""
+fine_tuning.py — Fine-tuning do modelo Gemma 3 1B com LoRA/QLoRA.
+
+Responsabilidades exclusivas deste módulo:
+  - Preparação e tokenização do dataset
+  - Configuração e execução do treinamento (Trainer + PEFT/LoRA)
+  - Salvamento local do adapter treinado
+
+A autenticação HuggingFace e o upload do adapter são delegados para hf_model.py.
+"""
+
+import sys
 from pathlib import Path
+
+# Garante que src/ esteja no path para importar log_record
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from typing import Dict, List
 
 import torch
 from datasets import Dataset, load_dataset
+from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -12,18 +28,23 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-from peft import LoraConfig, get_peft_model, PeftModel
+
 from log_record import get_logger
+from hf_model import authenticate_hf, push_adapter_to_hub
+
+# RTX 4050 (Ada Lovelace / sm_89): ativa TF32 nos Tensor Cores para operações de
+# matmul e convoluções. Oferece aceleração significativa sem perda perceptível de
+# precisão em relação ao float32 completo.
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 logger = get_logger()
 
-logger.info("Início do fine-tuning (padrão Qwen 3.5 LoRA)")
-
-# Modelo base Qwen 3.5 no HuggingFace (menor que Mistral 7B e mais leve em alguns cenários)
-# Ajuste se desejar usar outro checkpoint (ex: qwen/Qwen-3.5-base, qwen/Qwen-3.5-*
-DEFAULT_BASE_MODEL = "Qwen/Qwen3.5-2B"
+# Modelo base Gemma 3 no HuggingFace — 1B de parâmetros, instruction-tuned, multilingual e leve.
+# Para fins acadêmicos, é uma excelente opção: roda em GPUs modestas e suporta LoRA sem problemas.
+DEFAULT_BASE_MODEL = "google/gemma-3-1b-it"
 DEFAULT_DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "preprocessed" / "instruction_tuning_data.json"
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "models" / "qwen-3.5-med-assist"
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "models" / "gemma-3-med-assist"
 
 
 def build_prompt(instruction: str, input_text: str, output_text: str) -> str:
@@ -69,45 +90,6 @@ def get_device_type() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def load_custom_model(model_dir: Path, device: str | None = None):
-    """Carrega o modelo tunado PEFT + tokenizer para inferência (compatível com LangChain/LangGraph)."""
-    device = device or get_device_type()
-
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True, use_fast=False)
-    except Exception as e:
-        logger.warning(
-            "\t[FT] Falha ao carregar tokenizer com trust_remote_code=True: %s; tentando fallback trust_remote_code=False",
-            e,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=False, use_fast=False)
-
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model_kwargs = {
-        "device_map": "auto" if device == "cuda" else None,
-        "torch_dtype": torch.float16 if device == "cuda" else torch.float32,
-        "trust_remote_code": True,
-    }
-
-    try:
-        model = AutoModelForCausalLM.from_pretrained(model_dir, **model_kwargs)
-    except Exception as e:
-        logger.exception("\t[FT] Falha ao baixar/carregar modelo de %s: %s", model_dir, e)
-        raise RuntimeError(f"Falha ao carregar modelo de {model_dir}") from e
-
-    model.resize_token_embeddings(len(tokenizer))
-
-    # se foi treinado com PEFT LoRA, carregue-o
-    try:
-        model = PeftModel.from_pretrained(model, model_dir)
-    except Exception as e:
-        logger.warning("\t[FT] Não foi possível carregar o modelo PEFT a partir de %s: %s", model_dir, e)
-
-    return model, tokenizer
-
-
 def prepare_model_and_tokenizer(base_model: str, device: str):
     """Carrega e anexa LoRA ao modelo para treinamento.
 
@@ -127,35 +109,24 @@ def prepare_model_and_tokenizer(base_model: str, device: str):
 
     model_kwargs = {
         "device_map": "auto" if device == "cuda" else None,
-        "torch_dtype": torch.float16 if device == "cuda" else torch.float32,
+        # bfloat16: dtype preferido para Ada Lovelace. Mais estável que float16.
+        "torch_dtype": torch.bfloat16 if device == "cuda" else torch.float32,
         "low_cpu_mem_usage": True,
         "trust_remote_code": True,
     }
 
     if device == "cuda":
-        if "qwen" not in base_model.lower():
-            try:
-                import bitsandbytes  # noqa: F401
-                model_kwargs["load_in_8bit"] = True
-            except Exception:
-                logger.warning(
-                    "\t[FT] bitsandbytes não disponível; carregando modelo com fp16 em vez de 8-bit"
-                )
-        else:
-            logger.warning(
-                "\t[FT] Modelo Qwen detectado (%s): omitindo load_in_8bit pois não é compatível com Qwen3_5ForCausalLM",
-                base_model,
-            )
-        # Configuração de quantização de 4-bits (QLoRA) para economizar VRAM
-        # Isso substitui o antigo 'load_in_8bit' e é mais eficiente.
+        # QLoRA 4-bits (nf4) com bfloat16 como dtype de cômputo.
+        # bfloat16 alinha com o dtype do treino e é melhor suportado em Ada Lovelace.
+        # double_quant: quantiza também as constantes de quantização, economizando ~0.4 bits/param.
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
         )
         model_kwargs["quantization_config"] = quantization_config
-        logger.info("\t[FT] GPU detectada. Ativando quantização de 4-bits (QLoRA).")
+        logger.info("\t[FT] GPU detectada. Ativando QLoRA 4-bit (nf4, bfloat16).")
 
     try:
         model = AutoModelForCausalLM.from_pretrained(base_model, **model_kwargs)
@@ -169,13 +140,15 @@ def prepare_model_and_tokenizer(base_model: str, device: str):
 
     model.resize_token_embeddings(len(tokenizer))
 
+    # Para Gemma 3, todos os módulos de atenção são incluídos no LoRA
+    # (q_proj, k_proj, v_proj, o_proj) para melhor qualidade de adaptação.
     peft_config = LoraConfig(
         task_type="CAUSAL_LM",
         inference_mode=False,
         r=16,
         lora_alpha=32,
         lora_dropout=0.05,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
 
     model = get_peft_model(model, peft_config)
@@ -185,16 +158,22 @@ def prepare_model_and_tokenizer(base_model: str, device: str):
 
 
 def train(
-        base_model: str = DEFAULT_BASE_MODEL,  # id do modelo HF (mistralai/mistral-7b)
-        data_file: Path = DEFAULT_DATA_FILE,  # caminho para JSON de instruções
-        output_dir: Path = DEFAULT_OUTPUT_DIR,  # onde salvar o modelo customizado
-        num_train_epochs: int = 3,  # números de épocas para treinamento
-        per_device_train_batch_size: int = 4,  # batch size por GPU/CPU
-        gradient_accumulation_steps: int = 4,  # acumula gradientes para efetivo batch maior
-        learning_rate: float = 2e-4,  # taxa de aprendizado da otimização
-    max_seq_length: int = 512,  # comprimento máximo de tokenização (reduz VRAM)
-        device: str | None = None,  # 'cuda' ou 'cpu' para carregar modelo
+        base_model: str = DEFAULT_BASE_MODEL,           # id do modelo HF (google/gemma-3-1b-it)
+        data_file: Path = DEFAULT_DATA_FILE,            # caminho para JSON de instruções
+        output_dir: Path = DEFAULT_OUTPUT_DIR,          # onde salvar o modelo customizado
+        num_train_epochs: int = 3,                      # números de épocas para treinamento
+        per_device_train_batch_size: int = 4,           # batch size por GPU/CPU
+        gradient_accumulation_steps: int = 4,           # acumula gradientes para efetivo batch maior
+        learning_rate: float = 2e-4,                    # taxa de aprendizado da otimização
+        max_seq_length: int = 512,                      # comprimento máximo de tokenização (reduz VRAM)
+        device: str | None = None,                      # 'cuda' ou 'cpu' para carregar modelo
+        push_to_hub_repo: str | None = None,            # ex: "seu-usuario/gemma-3-med-assist"
     ) -> None:
+    logger.info("Início do fine-tuning")
+
+    # Autentica no HuggingFace (necessário para modelos gated como Gemma 3)
+    authenticate_hf()
+
     device = device or get_device_type()
     has_gpu = device == "cuda"
 
@@ -207,9 +186,15 @@ def train(
     logger.info("\t[FT] dataset carregado com %s registros", len(dataset))
 
     if has_gpu:
-        logger.info("\t[FT] GPU disponível; tentando carregar em 8-bit")
+        vram_total = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
+        vram_reserved = torch.cuda.memory_reserved(0) / 1024 ** 3
+        gpu_name = torch.cuda.get_device_properties(0).name
+        logger.info(
+            "\t[FT] GPU detectada: %s | VRAM total: %.1f GB | Já reservada: %.1f GB",
+            gpu_name, vram_total, vram_reserved,
+        )
     else:
-        logger.warning("\t[FT] GPU não encontrada; sem 8-bit. Pode ser lento/muito pesado.")
+        logger.warning("\t[FT] GPU não encontrada; treinando na CPU. Pode ser lento/muito pesado.")
 
     model, tokenizer = prepare_model_and_tokenizer(base_model, device)
 
@@ -228,13 +213,16 @@ def train(
         gradient_accumulation_steps=gradient_accumulation_steps,
         num_train_epochs=num_train_epochs,
         learning_rate=learning_rate,
-        fp16=has_gpu,
-        logging_steps=1,  # Log a cada passo para depuração
-        save_steps=5,  # Salva um checkpoint antes do fim do treino (total de 6 passos)
+        # bf16 é preferível a fp16 em Ada Lovelace (RTX 40xx): sem risco de overflow
+        # numérico e com suporte nativo nos Tensor Cores da GPU.
+        bf16=has_gpu,
+        fp16=False,
+        # paged_adamw_8bit: mantém o estado do otimizador em 8-bit com paginação
+        # para CPU quando a VRAM está cheia, economizando ~75% versus AdamW padrão.
+        optim="paged_adamw_8bit" if has_gpu else "adamw_torch",
+        logging_steps=1,
+        save_steps=5,
         save_total_limit=3,
-        # Avaliação desligada para reduzir custo em fine-tuning local.
-        # Alguns backends podem não reconhecer 'evaluation_strategy', então omitimos explicitamente.
-        # evaluation_strategy="no",
         save_strategy="steps",
         logging_dir=str(output_dir / "logs"),
         remove_unused_columns=False,
@@ -270,9 +258,13 @@ def train(
 
     logger.info("Fine-tuning concluído com sucesso!")
 
+    # Upload opcional do adapter para o HuggingFace Hub.
+    # Somente os adapter weights são enviados (~50-200 MB), não o modelo base completo.
+    if push_to_hub_repo:
+        push_adapter_to_hub(output_dir, push_to_hub_repo)
+
 
 if __name__ == "__main__":
-    
     try:
         train()
     except Exception as exc:

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-LOG_DIR = Path(__file__).resolve().parents[2] / "log"
+LOG_DIR = Path(__file__).resolve().parents[1] / "log"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_LOGGER_NAME = "techchallenge_fase3"
@@ -45,4 +45,3 @@ def get_logger() -> logging.Logger:
     if _LOGGER is None:
         _LOGGER = setup_logger()
     return _LOGGER
-
