@@ -7,11 +7,13 @@ Assistente médico virutal, treinado com os dados próprios de um hospital hipot
 Os fluxos de decisão é baseado em grafos e foram implementados com uso de LangGraph.
 
 ### Modelo LLM
-Focado em processamento de liguagem natural, opção foi pelo modelo  `Qwen 3.5-2B`, baseando a escolha em:
+Focado em processamento de linguagem natural, a opção foi pelo modelo `google/gemma-3-1b-it` (Gemma 3 — 1B parâmetros, instruction-tuned), baseando a escolha em:
 - Fins acadêmicos
-- Leveza do modelo
-- Boa performance com GPUs modestas
-- Apto a utilizar LoRA
+- Leveza do modelo (1B parâmetros)
+- Suporte nativo a múltiplos idiomas, incluindo português
+- Instruction-tuned, facilitando fine-tuning no formato Q&A
+- Apto a utilizar LoRA/QLoRA em GPUs modestas
+- Acesso direto via HuggingFace sem restrições de licença
 
 ### Dados para fine-tunning
 #### MedPT
@@ -23,13 +25,12 @@ Agradecimento à [Fernanda Bufon Farber](https://www.linkedin.com/in/ACoAADJqYUg
 #### MedQuAD: Medical Question Answering Dataset
 Conjunto de Dados de Perguntas e Respostas Médicas), é uma coleção de pares de perguntas e respostas meticulosamente selecionadas de 12 sites confiáveis do National Institutes of Health (NIH). Esses sites cobrem uma ampla gama de tópicos de saúde, desde cancer.gov até GARD (Genetic and Rare Diseases Information Resource)
 
-## 2. Instalação (REVISAR)
-Pré-requisito: Ollama instalado no SO
+## 2. Instalação
+Pré-requisito: Python 3.10+ e CUDA (opcional, mas recomendado)
 
 ### Modelo e Pacotes
-- > ollama run mistral
-- > pip install -r requirements.txt
-- > python -m spacy download pt_core_news_sm
+- `> pip install -r requirements.txt`
+- `> python -m spacy download pt_core_news_sm`
 
 ### Extras
 - Configurar arquivo .env
