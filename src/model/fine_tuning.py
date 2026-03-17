@@ -47,12 +47,12 @@ DEFAULT_DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "preprocessed
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "models" / "gemma-3-med-assist"
 
 
-def build_prompt(instruction: str, input_text: str, output_text: str) -> str:
-    instruction = (instruction or "").strip()
+def build_prompt(especialidade: str, input_text: str, output_text: str) -> str:
+    especialidade = (especialidade or "").strip()
     input_text = (input_text or "").strip()
     output_text = (output_text or "").strip()
 
-    prompt = "### Instruction:\n" + instruction + "\n"
+    prompt = "### Especialidade:\n" + especialidade + "\n"
     if input_text:
         prompt += "\n### Input:\n" + input_text + "\n"
     prompt += "\n### Response:\n" + output_text
@@ -78,6 +78,7 @@ def preprocess_dataset(dataset: Dataset, tokenizer: AutoTokenizer, max_length: i
             return_tensors="pt",
         )
         tokenized["labels"] = tokenized["input_ids"].clone()
+        tokenized["labels"][tokenized["labels"] == tokenizer.pad_token_id] = -100
         return tokenized
 
     tokenized = dataset.map(tokenize_fn, batched=True, remove_columns=dataset.column_names)

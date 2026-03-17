@@ -66,15 +66,36 @@ def _clean_whitespace(text: str) -> str:
     return text.strip()
 
 
-def get_spacy_model(model_name: str = "pt_core_news_sm") -> spacy.language.Language:
+# Mapeamento de idioma suportado → modelo spaCy correspondente.
+_SPACY_MODELS: dict[str, str] = {
+    "pt": "pt_core_news_sm",
+    "en": "en_core_web_sm",
+}
+
+
+def get_spacy_model(lang: str = "pt") -> spacy.language.Language:
+    """Retorna o modelo spaCy para o idioma informado.
+
+    Args:
+        lang: Código do idioma — ``'pt'`` para Português ou ``'en'`` para Inglês.
+
+    Raises:
+        ValueError: Se ``lang`` não for um dos valores suportados.
+        OSError: Se o modelo spaCy não estiver instalado.  Execute
+            ``python -m spacy download <modelo>`` para instalá-lo.
+    """
+    model_name = _SPACY_MODELS.get(lang)
+    if model_name is None:
+        raise ValueError(
+            f"Idioma '{lang}' não suportado. Use um de: {list(_SPACY_MODELS.keys())}"
+        )
     try:
         return spacy.load(model_name)
-    except OSError:
-        fallback = "en_core_web_sm"
-        if model_name == fallback:
-            raise
-        print(f"Modelo {model_name} não encontrado. Tentando fallback {fallback}...")
-        return spacy.load(fallback)
+    except OSError as exc:
+        raise OSError(
+            f"Modelo spaCy '{model_name}' não encontrado. "
+            f"Instale com: python -m spacy download {model_name}"
+        ) from exc
 
 
 def preprocess_text(text: str, nlp: spacy.language.Language) -> str:
@@ -96,10 +117,20 @@ def preprocess_text(text: str, nlp: spacy.language.Language) -> str:
     return cleaned
 
 
-def preprocess_dataframe(df: pd.DataFrame, nlp: spacy.language.Language) -> pd.DataFrame:
+def preprocess_dataframe(df: pd.DataFrame, lang: str = "pt") -> pd.DataFrame:
+    """Pré-processa o DataFrame usando o modelo spaCy do idioma indicado.
+
+    Args:
+        df:   DataFrame com colunas ``question``, ``answer`` e ``focus_area``.
+        lang: Idioma do dataset — ``'pt'`` (Português) ou ``'en'`` (Inglês).
+              Determina qual modelo spaCy é usado para anonimização e limpeza.
+    """
     expected = ["question", "answer", "focus_area"]
     if not all(c in df.columns for c in expected):
         raise ValueError(f"DataFrame deve conter colunas {expected}.")
+
+    nlp = get_spacy_model(lang)
+    logger.info("\tModelo spaCy carregado para idioma '%s': %s", lang, nlp.meta.get("name", ""))
 
     contagem_original = len(df)
     df = df.copy()
@@ -107,7 +138,10 @@ def preprocess_dataframe(df: pd.DataFrame, nlp: spacy.language.Language) -> pd.D
     df["answer"] = df["answer"].fillna("").astype(str).apply(lambda t: preprocess_text(t, nlp))
     df["focus_area"] = df["focus_area"].fillna("Geral").astype(str).str.strip()
 
-    logger.info("\tDataFrame pré-processado. Linhas originais: %s, linhas finais: %s", contagem_original, len(df))
+    logger.info(
+        "\tDataFrame pré-processado (lang='%s'). Linhas originais: %s, linhas finais: %s",
+        lang, contagem_original, len(df),
+    )
     return df
 
 
@@ -115,10 +149,9 @@ def build_instruction_tuning(df: pd.DataFrame) -> list:
     ret = []
     for _, row in df.iterrows():
         focus_area = row["focus_area"] if pd.notna(row["focus_area"]) and row["focus_area"] != "" else "Geral"
-        instruction_text = f"Responda à pergunta com base no contexto fornecido. Área de domínio: {focus_area}."
 
         instruction_obj = InstructionTunning(
-            instruction=instruction_text,
+            especialidade=focus_area,
             input=row["question"],
             output=row["answer"],
         )
@@ -137,33 +170,31 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data"
     csv_path = data_dir / "original/medquad.csv"
-    nlp = get_spacy_model("pt_core_news_sm")
 
     logger.info("\tCaminhos configurados; data_dir=%s, csv_path=%s", data_dir, csv_path)
 
-    # HF dataset - específico para MedPT
+    # ── HF dataset (MedPT — Português) ──────────────────────────────────────
     try:
         hf_df = load_hf_dataset("AKCIT/MedPT", split="train", max_rows=10)
         logger.info("\tHF dataset carregado com sucesso; linhas: %s", len(hf_df))
+        hf_df = preprocess_dataframe(hf_df, lang="pt")
     except Exception as e:
-        logger.error("\tErro ao carregar HuggingFace dataset: %s", e, exc_info=True)
+        logger.error("\tErro ao carregar/pré-processar HuggingFace dataset: %s", e, exc_info=True)
         hf_df = pd.DataFrame({"question": [], "answer": [], "focus_area": []})
 
-    # CSV dataset
+    # ── CSV dataset (MedQuAD — Inglês) ──────────────────────────────────────
     try:
         csv_df = load_csv_dataset(csv_path, max_rows=10)
         logger.info("\tCSV dataset carregado com sucesso; linhas: %s", len(csv_df))
+        csv_df = preprocess_dataframe(csv_df, lang="en")
     except Exception as e:
-        logger.error("\tErro ao carregar CSV local: %s", e, exc_info=True)
+        logger.error("\tErro ao carregar/pré-processar CSV local: %s", e, exc_info=True)
         csv_df = pd.DataFrame({"question": [], "answer": [], "focus_area": []})
 
-    # Unificar
+    # ── Unificar após pré-processamento individual ───────────────────────────
     combined_df = pd.concat([hf_df, csv_df], ignore_index=True, sort=False)
     combined_df = combined_df[["question", "answer", "focus_area"]]
-    logger.info("\tDados unificados; total linhas antes de pré-processar: %s", len(combined_df))
-
-    # Pré-processamento
-    combined_df = preprocess_dataframe(combined_df, nlp)
+    logger.info("\tDados unificados; total linhas após pré-processar: %s", len(combined_df))
 
     out_dir = data_dir / "preprocessed"
     out_dir.mkdir(parents=True, exist_ok=True)
