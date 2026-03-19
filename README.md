@@ -15,6 +15,12 @@ Focado em processamento de linguagem natural, a opção foi pelo modelo `google/
 - Apto a utilizar LoRA/QLoRA em GPUs modestas
 - Acesso direto via HuggingFace sem restrições de licença
 
+### Modelo Fine Tuned
+O modelo fine tuned pode ser encontrado [aqui](https://huggingface.co/thiagotrr/gemma-3-med-assist)
+- Treinado com QLoRA 4-bit (nf4/bfloat16), 3 épocas, eval 80/20.
+- Avaliado com eval_loss ao final de cada época.
+- 5000 perguntas em PT_BR; 5000 perguntas em EN.
+
 ### Dados para fine-tunning
 #### MedPT
 É um conjunto de dados maciço de Perguntas e Respostas (Q&A) médicas, desenvolvido especificamente para o português brasileiro.
@@ -30,7 +36,6 @@ Pré-requisito: Python 3.10+ e CUDA (opcional, mas recomendado)
 
 ### Modelo e Pacotes
 - `> pip install -r requirements.txt`
-- `> python -m spacy download pt_core_news_sm`
 
 ### Extras
 - Configurar arquivo .env
@@ -39,12 +44,29 @@ HF_TOKEN=
 OPENAI_API_KEY=
 ```
 
-## Execução
+## 3. Execução
 
-### GPU ou CPU
+### Pipeline
+O pipeline é composto por 3 etapas:
+1. Pré-processamento
+2. Fine-tuning
+3. Upload
+
+Para executar o pipeline completo, passe o parâmetro `full_pipeline=True`:
+```bash
+python -m src.model.model_pipeline --full_pipeline
+```
+
+Para executar apenas o upload, passe o parâmetro `full_pipeline=False`:
+```bash
+python -m src.model.model_pipeline --full_pipeline=False
+``` 
+
+#### GPU ou CPU
 O código foi pensado para detectar a presença de GPU. No entanto, pode ser forçado o treino e execução passando os parâmetros:
 ```
 train(device="cuda")
 #ou
 train(device="cpu")
 ```
+**Atenção:** pode ser necessário instalar do PyTorch de versão específica compatível com o CUDA de sua GPU.

@@ -9,6 +9,8 @@ Responsabilidades exclusivas deste módulo:
 A autenticação HuggingFace e o upload do adapter são delegados para hf_model.py.
 """
 
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,11 +28,45 @@ from transformers import (
     BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
     Trainer,
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
     TrainingArguments,
 )
 
 from log_record import get_logger
 from hf_model import authenticate_hf, push_adapter_to_hub
+
+
+class JsonLoggingCallback(TrainerCallback):
+    """Grava métricas de treino (loss, grad_norm, learning_rate, eval_loss, etc.)
+    em um arquivo JSON simples, sem dependência de TensorBoard ou W&B.
+
+    Cada registro é um dict com ``step``, ``epoch`` e todas as métricas
+    reportadas pelo Trainer naquele passo/época.
+    O arquivo é re-escrito a cada entrada, por isso o conteúdo sempre
+    reflete o estado mais atual do treino.
+    """
+
+    def __init__(self, log_file: Path) -> None:
+        self.log_file = Path(log_file)
+        self._records: list[dict] = []
+
+    def on_log(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        logs: dict | None = None,
+        **kwargs,
+    ) -> None:
+        if not logs:
+            return
+        record = {"step": state.global_step, "epoch": state.epoch, **logs}
+        self._records.append(record)
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.log_file, "w", encoding="utf-8") as f:
+            json.dump(self._records, f, ensure_ascii=False, indent=2)
 
 # RTX 4050 (Ada Lovelace / sm_89): ativa TF32 nos Tensor Cores para operações de
 # matmul e convoluções. Oferece aceleração significativa sem perda perceptível de
@@ -60,28 +96,44 @@ def build_prompt(especialidade: str, input_text: str, output_text: str) -> str:
 
 
 def preprocess_dataset(dataset: Dataset, tokenizer: AutoTokenizer, max_length: int = 1024) -> Dataset:
-    required_cols = {"instruction", "input", "output"}
+    """Tokeniza o dataset para treinamento causal (CLM).
+
+    Cada amostra é formatada como um bloco de texto único
+    (especialidade + input + output) e truncada/padded para `max_length`.
+    Os tokens de padding nos `labels` são mascarados com -100 para que a
+    loss não seja calculada sobre eles — evitando ruído no gradiente.
+    """
+    required_cols = {"especialidade", "input", "output"}
     if not required_cols.issubset(set(dataset.column_names)):
         raise ValueError(f"Dataset precisa conter colunas {required_cols}.")
 
+    pad_id = tokenizer.pad_token_id
+
     def tokenize_fn(batch: Dict[str, List[str]]) -> Dict[str, List]:
         prompts = [
-            build_prompt(i, inp, o)
-            for i, inp, o in zip(batch["instruction"], batch.get("input", []), batch["output"])
+            build_prompt(esp, inp, o)
+            for esp, inp, o in zip(batch["especialidade"], batch.get("input", []), batch["output"])
         ]
 
+        # Sem return_tensors='pt': Dataset.map exige listas/arrays, não tensors.
+        # A conversão para torch ocorre no set_format() abaixo.
         tokenized = tokenizer(
             prompts,
             truncation=True,
             padding="max_length",
             max_length=max_length,
-            return_tensors="pt",
         )
-        tokenized["labels"] = tokenized["input_ids"].clone()
-        tokenized["labels"][tokenized["labels"] == tokenizer.pad_token_id] = -100
+
+        # Copia os input_ids como labels e mascara o padding com -100.
+        # Isso impede que a loss seja computada sobre tokens de preenchimento.
+        tokenized["labels"] = [
+            [-100 if token_id == pad_id else token_id for token_id in ids]
+            for ids in tokenized["input_ids"]
+        ]
         return tokenized
 
     tokenized = dataset.map(tokenize_fn, batched=True, remove_columns=dataset.column_names)
+    # Converte listas para tensors PyTorch apenas aqui, fora do map.
     tokenized.set_format(type="torch")
     return tokenized
 
@@ -111,7 +163,7 @@ def prepare_model_and_tokenizer(base_model: str, device: str):
     model_kwargs = {
         "device_map": "auto" if device == "cuda" else None,
         # bfloat16: dtype preferido para Ada Lovelace. Mais estável que float16.
-        "torch_dtype": torch.bfloat16 if device == "cuda" else torch.float32,
+        "dtype": torch.bfloat16 if device == "cuda" else torch.float32,
         "low_cpu_mem_usage": True,
         "trust_remote_code": True,
     }
@@ -172,7 +224,7 @@ def train(
     ) -> None:
     logger.info("Início do fine-tuning")
 
-    # Autentica no HuggingFace (necessário para modelos gated como Gemma 3)
+    # Autentica no HuggingFace e carrega variáveis do .env (incluindo TENSORBOARD_LOGGING_DIR).
     authenticate_hf()
 
     device = device or get_device_type()
@@ -185,6 +237,14 @@ def train(
 
     dataset = load_dataset("json", data_files=str(data_file), split="train")
     logger.info("\t[FT] dataset carregado com %s registros", len(dataset))
+
+    # O split de avaliação nunca é visto durante o backpropagation.
+    # Permite monitorar `eval_loss` por época e detectar overfitting precocemente.
+    splits = dataset.train_test_split(test_size=0.2, seed=42)
+    logger.info(
+        "\t[FT] split treino/avaliação: %s / %s amostras",
+        len(splits["train"]), len(splits["test"]),
+    )
 
     if has_gpu:
         vram_total = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
@@ -204,7 +264,9 @@ def train(
         model.config.use_cache = False
         model.gradient_checkpointing_enable()
 
-    train_dataset = preprocess_dataset(dataset, tokenizer, max_length=max_seq_length)
+    train_dataset = preprocess_dataset(splits["train"], tokenizer, max_length=max_seq_length)
+    # Pré-processa o split de avaliação com a mesma função — garante formato idêntico.
+    eval_dataset  = preprocess_dataset(splits["test"],  tokenizer, max_length=max_seq_length)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -221,22 +283,28 @@ def train(
         # paged_adamw_8bit: mantém o estado do otimizador em 8-bit com paginação
         # para CPU quando a VRAM está cheia, economizando ~75% versus AdamW padrão.
         optim="paged_adamw_8bit" if has_gpu else "adamw_torch",
-        logging_steps=1,
-        save_steps=5,
+        logging_steps=20,
         save_total_limit=3,
-        save_strategy="steps",
-        logging_dir=str(output_dir / "logs"),
+        # save_strategy deve coincidir com eval_strategy para que load_best_model_at_end funcione.
+        save_strategy="epoch",
+        eval_strategy="epoch",  # Avalia ao final de cada época e registra eval_loss no log.
         remove_unused_columns=False,
-        report_to=["none"],
+        report_to=["none"],  # métricas gravadas via JsonLoggingCallback
+        load_best_model_at_end=True,   # salva o checkpoint com menor eval_loss
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
     )
 
+    # mlm=False: treinamento causal (next-token prediction), não masked LM.
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,     # split de avaliação (20 % do dataset)
         data_collator=data_collator,
+        callbacks=[JsonLoggingCallback(output_dir / "training_logs.json")],
     )
 
     logger.info("\t[FT] Iniciando treinamento")
@@ -267,7 +335,7 @@ def train(
 
 if __name__ == "__main__":
     try:
-        train()
+        train(push_to_hub_repo="thiagotrr/gemma-3-med-assist")
     except Exception as exc:
         logger.exception("\tErro durante fine-tuning: %s", exc)
         logger.info("Fine-tuning falhou.")

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 from dotenv import load_dotenv
 from huggingface_hub import login, upload_folder, HfApi
+from huggingface_hub.utils import LocalTokenNotFoundError
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -38,6 +39,16 @@ def authenticate_hf() -> bool:
     load_dotenv()
     token = os.getenv("HF_TOKEN")
     if token:
+        try:
+            # Verifica se já existe uma sessão autenticada válida antes de chamar login().
+            user_info = HfApi().whoami(token=token)
+            logger.info("[HF] Já autenticado no HuggingFace como: %s", user_info.get("name"))
+            return True
+        except LocalTokenNotFoundError:
+            pass  # Token não está em cache; segue para o login().
+        except Exception:
+            pass 
+
         try:
             login(token=token)
             logger.info("[HF] Autenticado no HuggingFace com sucesso.")
@@ -129,11 +140,31 @@ def load_model_from_hub(model_dir: Path, device: str | None = None):
 # ---------------------------------------------------------------------------
 # Upload do adapter para o HuggingFace Hub
 # ---------------------------------------------------------------------------
-def push_adapter_to_hub(output_dir: Path, repo_id: str) -> None:
-    """Faz upload do adapter LoRA salvo em output_dir para o HuggingFace Hub.
+# Arquivos imprescindíveis para recarregar o adapter PEFT localmente ou via Hub:
+#   adapter_config.json      — configuração LoRA (rank, alpha, target_modules…)
+#   adapter_model.safetensors — pesos do adapter
+#   tokenizer.json            — vocabulário/merges do tokenizer
+#   tokenizer_config.json     — configuração do tokenizer (pad, eos, bos tokens)
+#   chat_template.jinja       — template de chat usado na inferência
+#
+# Tudo o mais (checkpoints intermediários, estado do otimizador, logs e
+# training_args.bin) é descartado para manter o repositório enxuto.
+_HUB_IGNORE_PATTERNS: list[str] = [
+    "checkpoint-*/",    # checkpoints intermediários (potenciais GBs)
+    "logs/",            # logs do Trainer
+    "optimizer.pt",     # estado do otimizador (não necessário para inferência)
+    "training_args.bin",# metadados de treino (não necessário para inferência)
+]
 
-    Cria o repositório se ele ainda não existir. Apenas os adapter weights
-    são enviados (~50–200 MB), não o modelo base completo.
+
+def push_adapter_to_hub(output_dir: Path, repo_id: str) -> None:
+    """Faz upload dos artefatos essenciais do adapter LoRA para o HuggingFace Hub.
+
+    Cria o repositório se ele ainda não existir. Apenas os arquivos
+    estritamente necessários para recarregar o modelo são enviados:
+    `adapter_config.json`, `adapter_model.safetensors`, arquivos do
+    tokenizer e `chat_template.jinja`. Checkpoints intermediários,
+    optimizer state e logs são automaticamente excluídos.
 
     Args:
         output_dir: Diretório local com os arquivos do adapter.
@@ -141,6 +172,9 @@ def push_adapter_to_hub(output_dir: Path, repo_id: str) -> None:
     """
     logger.info("[HF] Iniciando upload do adapter para o Hub: %s", repo_id)
     try:
+
+        authenticate_hf()
+
         api = HfApi()
         api.create_repo(repo_id=repo_id, exist_ok=True, private=False)
         logger.info("[HF] Repositório verificado/criado: %s", repo_id)
@@ -149,6 +183,8 @@ def push_adapter_to_hub(output_dir: Path, repo_id: str) -> None:
             folder_path=str(output_dir),
             repo_id=repo_id,
             commit_message="Fine-tuned Gemma 3 1B adapter (LoRA) — FIAP Tech Challenge Fase 3",
+            # Exclui arquivos desnecessários para inferência (ver _HUB_IGNORE_PATTERNS).
+            ignore_patterns=_HUB_IGNORE_PATTERNS,
         )
         logger.info("[HF] Adapter enviado com sucesso para: https://huggingface.co/%s", repo_id)
     except Exception as e:

@@ -1,6 +1,6 @@
-import os
 import re
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Union
@@ -16,18 +16,21 @@ from log_record import get_logger
 
 logger = get_logger()
 
-
 def load_hf_dataset(dataset_name: str, split: str = "train", max_rows: Optional[int] = None) -> pd.DataFrame:
-    """Carrega o dataset MedPT do HuggingFace com colunas question, answer, profession."""
-    ds = load_dataset(dataset_name, split=split)
-    required = ["question", "answer", "profession"]
+    """Carrega o dataset MedPT do HuggingFace com colunas question, answer e especialidade (focus_area).
 
-    missing = [c for c in required if c not in ds.column_names]
+    A coluna ``medical_specialty`` do dataset AKCIT/MedPT é renomeada para
+    ``focus_area`` para manter consistência com o CSV local e com o restante do pipeline.
+    """
+    ds = load_dataset(dataset_name, split=split)
+    base_required = ["question", "answer", "medical_specialty"]
+
+    missing = [c for c in base_required if c not in ds.column_names]
     if missing:
         raise ValueError(f"Dataset HF está faltando colunas necessárias: {missing}")
 
-    df = ds.to_pandas()[required].copy()
-    df = df.rename(columns={"profession": "focus_area"})
+    df = ds.to_pandas()[base_required].copy()
+    df = df.rename(columns={"medical_specialty": "focus_area"})
 
     if max_rows is not None and max_rows >= 0:
         df = df.iloc[:max_rows]
@@ -73,29 +76,51 @@ _SPACY_MODELS: dict[str, str] = {
 }
 
 
+def ensure_spacy_model(model_name: str) -> None:
+    """Garante que o modelo spaCy está instalado, instalando-o automaticamente se necessário.
+
+    Args:
+        model_name: Nome do pacote spaCy (ex: ``'pt_core_news_sm'``).
+
+    Raises:
+        RuntimeError: Se a instalação automática falhar.
+    """
+    try:
+        spacy.load(model_name)
+    except OSError:
+        logger.warning(
+            "\tModelo spaCy '%s' não encontrado. Instalando automaticamente...", model_name
+        )
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "spacy", "download", model_name],
+                check=True,
+            )
+            logger.info("\tModelo spaCy '%s' instalado com sucesso.", model_name)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"Falha ao instalar o modelo spaCy '{model_name}'. "
+                f"Tente manualmente: python -m spacy download {model_name}"
+            ) from exc
+
+
 def get_spacy_model(lang: str = "pt") -> spacy.language.Language:
-    """Retorna o modelo spaCy para o idioma informado.
+    """Retorna o modelo spaCy para o idioma informado, instalando-o se necessário.
 
     Args:
         lang: Código do idioma — ``'pt'`` para Português ou ``'en'`` para Inglês.
 
     Raises:
         ValueError: Se ``lang`` não for um dos valores suportados.
-        OSError: Se o modelo spaCy não estiver instalado.  Execute
-            ``python -m spacy download <modelo>`` para instalá-lo.
+        RuntimeError: Se a instalação automática do modelo falhar.
     """
     model_name = _SPACY_MODELS.get(lang)
     if model_name is None:
         raise ValueError(
             f"Idioma '{lang}' não suportado. Use um de: {list(_SPACY_MODELS.keys())}"
         )
-    try:
-        return spacy.load(model_name)
-    except OSError as exc:
-        raise OSError(
-            f"Modelo spaCy '{model_name}' não encontrado. "
-            f"Instale com: python -m spacy download {model_name}"
-        ) from exc
+    ensure_spacy_model(model_name)
+    return spacy.load(model_name)
 
 
 def preprocess_text(text: str, nlp: spacy.language.Language) -> str:
@@ -162,7 +187,7 @@ def build_instruction_tuning(df: pd.DataFrame) -> list:
     return ret
 
 
-def main() -> None:
+def process() -> None:
     logger.info("Pré-processamento do dados para fine tuning")
 
     # usa o caminho do repositório, não apenas o cwd, garantindo que `data` esteja
@@ -175,7 +200,9 @@ def main() -> None:
 
     # ── HF dataset (MedPT — Português) ──────────────────────────────────────
     try:
-        hf_df = load_hf_dataset("AKCIT/MedPT", split="train", max_rows=10)
+        # max_rows: limita a 5.000 linhas para manter o treino em ~2-3h na RTX 4050.
+        # Para produção sem limite de tempo, remover o parâmetro.
+        hf_df = load_hf_dataset("AKCIT/MedPT", split="train", max_rows=5000)
         logger.info("\tHF dataset carregado com sucesso; linhas: %s", len(hf_df))
         hf_df = preprocess_dataframe(hf_df, lang="pt")
     except Exception as e:
@@ -184,7 +211,9 @@ def main() -> None:
 
     # ── CSV dataset (MedQuAD — Inglês) ──────────────────────────────────────
     try:
-        csv_df = load_csv_dataset(csv_path, max_rows=10)
+        # max_rows: limita a 5.000 linhas para manter o treino em ~2-3h na RTX 4050.
+        # Para produção sem limite de tempo, remover o parâmetro.
+        csv_df = load_csv_dataset(csv_path, max_rows=5000)
         logger.info("\tCSV dataset carregado com sucesso; linhas: %s", len(csv_df))
         csv_df = preprocess_dataframe(csv_df, lang="en")
     except Exception as e:
@@ -195,6 +224,13 @@ def main() -> None:
     combined_df = pd.concat([hf_df, csv_df], ignore_index=True, sort=False)
     combined_df = combined_df[["question", "answer", "focus_area"]]
     logger.info("\tDados unificados; total linhas após pré-processar: %s", len(combined_df))
+
+    if combined_df.empty:
+        raise RuntimeError(
+            "Nenhum dado foi carregado após pré-processamento. "
+            "Verifique os logs acima para identificar falhas no carregamento do dataset HF e/ou CSV. "
+            "Os arquivos de saída NÃO foram gerados para evitar sobrescrever dados válidos."
+        )
 
     out_dir = data_dir / "preprocessed"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -214,4 +250,4 @@ def main() -> None:
     logger.info("Pré-processamento concluído.")
 
 if __name__ == "__main__":
-    main()
+    process()
