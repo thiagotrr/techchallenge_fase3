@@ -32,7 +32,6 @@ import os
 import sys
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 # ── Garante que src/ e src/model/ estejam no sys.path ───────────────────────
 _GRAPH_DIR = Path(__file__).resolve().parent      # src/graph/
@@ -72,6 +71,16 @@ _MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", "512"))
 # ---------------------------------------------------------------------------
 
 _llm = None  # instância singleton do LangChain LLM (carregado apenas uma vez)
+
+
+def inicializar_llm() -> None:
+    """Pré-carrega o LLM no início da aplicação (antes da interação com o usuário).
+
+    Deve ser chamado em main.py logo após exibir o header, para que o modelo
+    já esteja em memória quando o grafo iniciar o processamento.
+    """
+    _carregar_llm()
+
 
 def _carregar_llm():
     """Carrega e retorna o LLM singleton (HuggingFacePipeline ou mock).
@@ -125,8 +134,8 @@ def _carregar_llm():
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
 
-        device = "cuda" if __import__("torch").cuda.is_available() else "cpu"
-        dtype  = __import__("torch").bfloat16 if device == "cuda" else __import__("torch").float32
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype  = torch.bfloat16 if device == "cuda" else torch.float32
 
         tokenizer = AutoTokenizer.from_pretrained(
             HF_REPO_ID, trust_remote_code=True, use_fast=False
@@ -223,7 +232,6 @@ def validar_entrada(state: EstadoConsulta) -> EstadoConsulta:
         especialidade, len(perguntas),
     )
     return {
-        **state,
         "dados_paciente": dados_paciente,
         "especialidade":  especialidade,
         "perguntas":      perguntas,
@@ -262,7 +270,7 @@ def consultar_modelo(state: EstadoConsulta) -> EstadoConsulta:
             logger.error("[NODES] consultar_modelo — erro na pergunta %d: %s", i, exc, exc_info=True)
             respostas.append(f"[Erro ao consultar o modelo: {exc}]")
 
-    return {**state, "respostas_modelo": respostas}
+    return {"respostas_modelo": respostas}
 
 
 def consultar_protocolos(state: EstadoConsulta) -> EstadoConsulta:
@@ -283,7 +291,7 @@ def consultar_protocolos(state: EstadoConsulta) -> EstadoConsulta:
         "[NODES] consultar_protocolos — %d protocolo(s) recuperado(s) para '%s'.",
         len(protocolos), especialidade,
     )
-    return {**state, "protocolos": protocolos}
+    return {"protocolos": protocolos}
 
 
 def montar_rascunho(state: EstadoConsulta) -> EstadoConsulta:
@@ -355,7 +363,7 @@ def montar_rascunho(state: EstadoConsulta) -> EstadoConsulta:
 
     rascunho = "\n".join(linhas)
     logger.info("[NODES] montar_rascunho — rascunho gerado (%d chars).", len(rascunho))
-    return {**state, "rascunho_recomendacao": rascunho}
+    return {"rascunho_recomendacao": rascunho}
 
 
 def revisao_humana(state: EstadoConsulta) -> EstadoConsulta:
@@ -382,7 +390,7 @@ def revisao_humana(state: EstadoConsulta) -> EstadoConsulta:
         "[NODES] revisao_humana — aprovado=%s | feedback='%s'",
         aprovado, feedback[:60] if feedback else "(nenhum)",
     )
-    return state
+    return {}
 
 
 def finalizar_recomendacao(state: EstadoConsulta) -> EstadoConsulta:
@@ -430,4 +438,4 @@ def finalizar_recomendacao(state: EstadoConsulta) -> EstadoConsulta:
         final = rascunho + "\n\n✅ RECOMENDAÇÃO APROVADA PELO PROFISSIONAL DE SAÚDE"
         logger.info("[NODES] finalizar_recomendacao — aprovado sem observações.")
 
-    return {**state, "recomendacao_final": final}
+    return {"recomendacao_final": final}

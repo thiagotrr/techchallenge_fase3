@@ -39,7 +39,7 @@ sys.path.insert(0, str(_SRC_DIR))
 
 from graph.graph import build_graph
 from graph.protocols import list_specialties
-from graph.nodes import MAX_QUESTIONS
+from graph.nodes import MAX_QUESTIONS, inicializar_llm
 from log_record import get_logger
 
 logger = get_logger()
@@ -51,10 +51,10 @@ SEPARATOR = "─" * 70
 
 def _print_header() -> None:
     print()
-    print("╔" + "═" * 68 + "╗")
-    print("║{:^68}║".format("🏥  ASSISTENTE MÉDICO — thiagotrr/gemma-3-med-assist"))
-    print("║{:^68}║".format("FIAP Tech Challenge · Fase 3"))
-    print("╚" + "═" * 68 + "╝")
+    print("╔" + "═" * 70 + "╗")
+    print("║{:^70}║".format("🏥  ASSISTENTE MÉDICO — thiagotrr/gemma-3-med-assist"))
+    print("║{:^70}║".format("FIAP Tech Challenge · Fase 3"))
+    print("╚" + "═" * 70 + "╝")
     print()
 
 
@@ -158,6 +158,14 @@ def _print_final(final: str) -> None:
 def main() -> None:
     _print_header()
 
+    # ── Pré-carregamento do modelo (antes da interação com o usuário) ────────────
+    print(SEPARATOR)
+    print("⚙️   Carregando modelo... (pode levar alguns instantes)")
+    print(SEPARATOR)
+    inicializar_llm()
+    print("✅  Modelo carregado com sucesso!")
+    print()
+
     # ── Coleta de dados ───────────────────────────────────────────────────────
     dados_paciente = _collect_patient_data()
     especialidade    = _collect_specialty()
@@ -177,7 +185,7 @@ def main() -> None:
     # ── Constrói e compila o grafo ────────────────────────────────────────────
     print()
     print(SEPARATOR)
-    print("⚙️   Carregando modelo e iniciando análise... (pode levar alguns instantes)")
+    print("⚙️   Iniciando análise...")
     print(SEPARATOR)
 
     app = build_graph()
