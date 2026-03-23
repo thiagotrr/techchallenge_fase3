@@ -127,7 +127,7 @@ def _carregar_llm():
 
     if usar_hub:
         logger.info("[NODES] Carregando modelo do HuggingFace Hub: %s", HF_REPO_ID)
-        from hf_model import authenticate_hf
+        from model.hf_model import authenticate_hf
         authenticate_hf()
 
         import torch
@@ -151,7 +151,7 @@ def _carregar_llm():
         )
     else:
         logger.info("[NODES] Carregando modelo local: %s", _LOCAL_MODEL_DIR)
-        from hf_model import authenticate_hf, load_model_from_hub
+        from model.hf_model import authenticate_hf, load_model_from_hub
         authenticate_hf()
         model, tokenizer = load_model_from_hub(_LOCAL_MODEL_DIR)
 
