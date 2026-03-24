@@ -1,6 +1,6 @@
 # FIAP - 7IADP - Tech Challenge Fase 3
 ## *Equipe*
-Thiago Rodrigues - RM367218
+Thiago Rodrigues - RM367218 <br>
 Luisa Sousa - RM366863
 
 ## 1. Descrição
