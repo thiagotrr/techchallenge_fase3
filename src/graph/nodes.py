@@ -186,8 +186,10 @@ def _montar_prompt(especialidade: str, dados_paciente: str, pergunta: str) -> st
     contexto = (
         f"Especialidade: {especialidade}\n"
         f"Dados do paciente: {dados_paciente}\n"
-        f"Pergunta: {pergunta}"
+        f"Pergunta: {pergunta}\n"
+        f"Apresente respostas sem mencionar nomes de pessoas ou informações identificáveis."
     )
+    
     return contexto
 
 
