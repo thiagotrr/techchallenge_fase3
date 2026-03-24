@@ -94,16 +94,18 @@ def load_model_from_hub(model_dir: Path, device: str | None = None):
     except Exception as e:
         raise RuntimeError(f"Falha ao ler base_model_name_or_path de {adapter_config_path}") from e
 
-    # Tokenizer
+    # Tokenizer — carregado do model_dir (adapter) para garantir o mesmo vocab_size
+    # usado durante o fine-tuning, evitando mismatch de embeddings ao aplicar o adapter.
+    tokenizer_source = str(model_dir)
     try:
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name, trust_remote_code=True, use_fast=False)
-        logger.info("[HF] Tokenizer carregado com sucesso (trust_remote_code=True).")
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, trust_remote_code=True, use_fast=False)
+        logger.info("[HF] Tokenizer carregado com sucesso de: %s", tokenizer_source)
     except Exception as e:
         logger.warning(
             "[HF] Falha ao carregar tokenizer com trust_remote_code=True: %s; tentando fallback.", e
         )
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name, trust_remote_code=False, use_fast=False)
-        logger.info("[HF] Tokenizer carregado via fallback (trust_remote_code=False).")
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, trust_remote_code=False, use_fast=False)
+        logger.info("[HF] Tokenizer carregado via fallback de: %s", tokenizer_source)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -125,6 +127,13 @@ def load_model_from_hub(model_dir: Path, device: str | None = None):
     except Exception as e:
         logger.exception("[HF] Falha ao baixar/carregar modelo base %s: %s", base_model_name, e)
         raise RuntimeError(f"Falha ao carregar modelo base {base_model_name}") from e
+
+    # Alinha o vocab_size do modelo base com o tokenizer salvo no adapter.
+    # Necessário porque resize_token_embeddings(len(tokenizer)) é chamado durante
+    # o fine-tuning (fine_tuning.py), podendo gerar uma dimensão diferente do
+    # config.vocab_size original (ex: Gemma 3: 262144 config vs 262145 tokenizer).
+    model.resize_token_embeddings(len(tokenizer))
+    logger.info("[HF] Embeddings redimensionados para vocab_size=%d.", len(tokenizer))
 
     # Adapter PEFT/LoRA
     try:
