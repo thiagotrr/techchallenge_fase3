@@ -1,6 +1,7 @@
 # FIAP - 7IADP - Tech Challenge Fase 3
-## *Euquipe*
+## *Equipe*
 Thiago Rodrigues - RM367218
+Luisa Sousa - RM366863
 
 ## 1. Descrição
 Assistente médico virutal, treinado com os dados próprios de um hospital hipotético, capaz de auxiliar nas condutas clínicas, responder dúvidas de médicos e sugerir procedimentos com base nos protocolos internos.
